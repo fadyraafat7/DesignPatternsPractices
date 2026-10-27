@@ -1,16 +1,24 @@
-
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { CalculatorFacade } from '../patterns/structural/CalculatorFacade';
-import { HistoryProxy } from '../patterns/structural/HistoryProxy';
-import { CommandInvoker, type Command } from '../patterns/behavioral/Command';
-import { CalculatorObserver, type CalcEvent } from '../patterns/behavioral/Observer';
-import { StateMachine } from '../patterns/behavioral/State';
+import { useState, useRef, useCallback, useEffect } from "react";
+import { CalculatorFacade } from "../patterns/structural/CalculatorFacade";
+import { HistoryProxy } from "../patterns/structural/HistoryProxy";
+import { CommandInvoker, type Command } from "../patterns/behavioral/Command";
+import {
+  CalculatorObserver,
+  type CalcEvent,
+} from "../patterns/behavioral/Observer";
+import { StateMachine } from "../patterns/behavioral/State";
 import {
   StrategyContext,
   BasicStrategy,
   ScientificStrategy,
-} from '../patterns/behavioral/Strategy';
-import type { CalcContext, CalcMode, CalcStateName, HistoryEntry, OperationSymbol } from '../types';
+} from "../patterns/behavioral/Strategy";
+import type {
+  CalcContext,
+  CalcMode,
+  CalcStateName,
+  HistoryEntry,
+  OperationSymbol,
+} from "../types";
 
 interface Snapshot {
   display: string;
@@ -22,10 +30,10 @@ interface Snapshot {
 }
 
 export function useCalculator() {
-  const [display, setDisplay] = useState('0');
+  const [display, setDisplay] = useState("0");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [mode, setMode] = useState<CalcMode>('BASIC');
-  const [stateName, setStateName] = useState<CalcStateName>('idle');
+  const [mode, setMode] = useState<CalcMode>("BASIC");
+  const [stateName, setStateName] = useState<CalcStateName>("idle");
   const [error, setError] = useState<string | null>(null);
   const [activePattern, setActivePattern] = useState<string | null>(null);
 
@@ -37,10 +45,10 @@ export function useCalculator() {
   const strategyContextRef = useRef(new StrategyContext(new BasicStrategy()));
 
   const ctxRef = useRef<CalcContext>({
-    display: '0',
+    display: "0",
     leftOperand: null,
     currentOperator: null,
-    rightDisplay: '',
+    rightDisplay: "",
     error: null,
     setState: (name) => {
       stateMachineRef.current.setState(name);
@@ -53,14 +61,17 @@ export function useCalculator() {
     window.setTimeout(() => setActivePattern(null), 1500);
   }, []);
 
-  const takeSnapshot = useCallback((): Snapshot => ({
-    display: ctxRef.current.display,
-    leftOperand: ctxRef.current.leftOperand,
-    currentOperator: ctxRef.current.currentOperator,
-    rightDisplay: ctxRef.current.rightDisplay,
-    error: ctxRef.current.error,
-    stateName: stateMachineRef.current.getStateName(),
-  }), []);
+  const takeSnapshot = useCallback(
+    (): Snapshot => ({
+      display: ctxRef.current.display,
+      leftOperand: ctxRef.current.leftOperand,
+      currentOperator: ctxRef.current.currentOperator,
+      rightDisplay: ctxRef.current.rightDisplay,
+      error: ctxRef.current.error,
+      stateName: stateMachineRef.current.getStateName(),
+    }),
+    [],
+  );
 
   const restoreSnapshot = useCallback((snap: Snapshot) => {
     ctxRef.current.display = snap.display;
@@ -81,54 +92,64 @@ export function useCalculator() {
 
   const handleNumber = useCallback(
     (num: string) => {
-      flashPattern('State');
+      flashPattern("State");
       const snap = takeSnapshot();
       const cmd: Command = {
         description: `Input ${num}`,
         execute: () => {
-          const ok = stateMachineRef.current.getCurrent().handleInput(ctxRef.current, num);
+          const ok = stateMachineRef.current
+            .getCurrent()
+            .handleInput(ctxRef.current, num);
           if (ok) {
             setDisplay(ctxRef.current.display);
-            observerRef.current.notify({ type: 'display', payload: ctxRef.current.display });
+            observerRef.current.notify({
+              type: "display",
+              payload: ctxRef.current.display,
+            });
           }
         },
         undo: () => restoreSnapshot(snap),
       };
       commandInvokerRef.current.execute(cmd);
     },
-    [flashPattern, takeSnapshot, restoreSnapshot]
+    [flashPattern, takeSnapshot, restoreSnapshot],
   );
 
   const handleOperator = useCallback(
     (op: OperationSymbol) => {
-      flashPattern('Factory');
+      flashPattern("Factory");
       const snap = takeSnapshot();
       const cmd: Command = {
         description: `Operator ${op}`,
         execute: () => {
-          const ok = stateMachineRef.current.getCurrent().handleOperator(ctxRef.current, op);
+          const ok = stateMachineRef.current
+            .getCurrent()
+            .handleOperator(ctxRef.current, op);
           if (ok) {
             setDisplay(ctxRef.current.display);
-            window.setTimeout(() => flashPattern('Decorator'), 200);
+            window.setTimeout(() => flashPattern("Decorator"), 200);
           }
         },
         undo: () => restoreSnapshot(snap),
       };
       commandInvokerRef.current.execute(cmd);
     },
-    [flashPattern, takeSnapshot, restoreSnapshot]
+    [flashPattern, takeSnapshot, restoreSnapshot],
   );
 
   const handleEquals = useCallback(() => {
-    flashPattern('Facade');
+    flashPattern("Facade");
     const ctx = ctxRef.current;
-    if (stateMachineRef.current.getStateName() !== 'operator' || ctx.rightDisplay === '') {
+    if (
+      stateMachineRef.current.getStateName() !== "operator" ||
+      ctx.rightDisplay === ""
+    ) {
       return;
     }
     const snap = takeSnapshot();
 
     const cmd: Command = {
-      description: 'Equals',
+      description: "Equals",
       execute: () => {
         try {
           stateMachineRef.current.getCurrent().handleEquals(ctx);
@@ -136,7 +157,7 @@ export function useCalculator() {
           const result = facadeRef.current.calculateBinary(
             ctx.leftOperand as number,
             ctx.currentOperator as OperationSymbol,
-            right
+            right,
           );
           const formatted = facadeRef.current.formatResult(result);
           const expression = `${ctx.leftOperand} ${ctx.currentOperator} ${right}`;
@@ -149,22 +170,22 @@ export function useCalculator() {
             error: false,
           });
 
-          observerRef.current.notify({ type: 'result', payload: formatted });
+          observerRef.current.notify({ type: "result", payload: formatted });
           setDisplay(formatted);
           ctx.display = formatted;
           ctx.leftOperand = null;
           ctx.currentOperator = null;
-          ctx.rightDisplay = '';
+          ctx.rightDisplay = "";
           setError(null);
-          stateMachineRef.current.setState('result');
-          setStateName('result');
+          stateMachineRef.current.setState("result");
+          setStateName("result");
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          stateMachineRef.current.setState('error');
-          setStateName('error');
+          const message = err instanceof Error ? err.message : "Unknown error";
+          stateMachineRef.current.setState("error");
+          setStateName("error");
           ctx.error = message;
           setError(message);
-          setDisplay('Error');
+          setDisplay("Error");
           addToHistory({
             id: crypto.randomUUID(),
             expression: `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay}`,
@@ -180,14 +201,14 @@ export function useCalculator() {
   }, [flashPattern, takeSnapshot, restoreSnapshot, addToHistory]);
 
   const handleClear = useCallback(() => {
-    flashPattern('Command');
+    flashPattern("Command");
     const snap = takeSnapshot();
     const cmd: Command = {
-      description: 'Clear',
+      description: "Clear",
       execute: () => {
         stateMachineRef.current.getCurrent().handleClear(ctxRef.current);
         setStateName(stateMachineRef.current.getStateName());
-        setDisplay('0');
+        setDisplay("0");
         setError(null);
       },
       undo: () => restoreSnapshot(snap),
@@ -198,11 +219,11 @@ export function useCalculator() {
   const handleBackspace = useCallback(() => {
     const ctx = ctxRef.current;
     const state = stateMachineRef.current.getStateName();
-    if (state === 'operator' && ctx.rightDisplay.length > 0) {
+    if (state === "operator" && ctx.rightDisplay.length > 0) {
       ctx.rightDisplay = ctx.rightDisplay.slice(0, -1);
-      ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay || ''}`;
+      ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay || ""}`;
       setDisplay(ctx.display);
-    } else if (state === 'input' && ctx.display.length > 1) {
+    } else if (state === "input" && ctx.display.length > 1) {
       ctx.display = ctx.display.slice(0, -1);
       setDisplay(ctx.display);
     }
@@ -210,7 +231,7 @@ export function useCalculator() {
 
   const handleScientific = useCallback(
     (fn: OperationSymbol) => {
-      flashPattern('Strategy');
+      flashPattern("Strategy");
       const ctx = ctxRef.current;
       const value = parseFloat(ctx.display) || 0;
       const prevDisplay = ctx.display;
@@ -231,12 +252,12 @@ export function useCalculator() {
             });
             setDisplay(formatted);
             ctx.display = formatted;
-            stateMachineRef.current.setState('result');
-            setStateName('result');
+            stateMachineRef.current.setState("result");
+            setStateName("result");
           } catch (err) {
-            const message = err instanceof Error ? err.message : 'Error';
+            const message = err instanceof Error ? err.message : "Error";
             setError(message);
-            setDisplay('Error');
+            setDisplay("Error");
             addToHistory({
               id: crypto.randomUUID(),
               expression: `${fn}(${value})`,
@@ -253,34 +274,36 @@ export function useCalculator() {
       };
       commandInvokerRef.current.execute(cmd);
     },
-    [flashPattern, addToHistory]
+    [flashPattern, addToHistory],
   );
 
   const handleToggleSign = useCallback(() => {
     const ctx = ctxRef.current;
-    if (ctx.display === '0') return;
-    ctx.display = ctx.display.startsWith('-') ? ctx.display.slice(1) : '-' + ctx.display;
+    if (ctx.display === "0") return;
+    ctx.display = ctx.display.startsWith("-")
+      ? ctx.display.slice(1)
+      : "-" + ctx.display;
     setDisplay(ctx.display);
   }, []);
 
   const handleUndo = useCallback(() => {
-    flashPattern('Command');
+    flashPattern("Command");
     commandInvokerRef.current.undo();
   }, [flashPattern]);
 
   const handleRedo = useCallback(() => {
-    flashPattern('Command');
+    flashPattern("Command");
     commandInvokerRef.current.redo();
   }, [flashPattern]);
 
   const toggleMode = useCallback(() => {
-    flashPattern('Strategy');
+    flashPattern("Strategy");
     setMode((m) => {
-      const newMode: CalcMode = m === 'BASIC' ? 'SCIENTIFIC' : 'BASIC';
+      const newMode: CalcMode = m === "BASIC" ? "SCIENTIFIC" : "BASIC";
       strategyContextRef.current.setStrategy(
-        newMode === 'BASIC' ? new BasicStrategy() : new ScientificStrategy()
+        newMode === "BASIC" ? new BasicStrategy() : new ScientificStrategy(),
       );
-      observerRef.current.notify({ type: 'mode', payload: newMode });
+      observerRef.current.notify({ type: "mode", payload: newMode });
       return newMode;
     });
   }, [flashPattern]);
@@ -291,35 +314,55 @@ export function useCalculator() {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = observerRef.current.subscribe((event) => {
+      console.log("Event received:", event);
+
+      if (event.type === "result") {
+        console.log("Calculation:", event.payload);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
-      if (e.ctrlKey && e.key === 'z') {
+      if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
         handleUndo();
         return;
       }
-      if (e.ctrlKey && e.key === 'y') {
+      if (e.ctrlKey && e.key === "y") {
         e.preventDefault();
         handleRedo();
         return;
       }
       if (/[0-9]/.test(e.key)) handleNumber(e.key);
-      else if (e.key === '.') handleNumber('.');
-      else if (e.key === '+') handleOperator('+');
-      else if (e.key === '-') handleOperator('-');
-      else if (e.key === '*') handleOperator('*');
-      else if (e.key === '/') {
+      else if (e.key === ".") handleNumber(".");
+      else if (e.key === "+") handleOperator("+");
+      else if (e.key === "-") handleOperator("-");
+      else if (e.key === "*") handleOperator("*");
+      else if (e.key === "/") {
         e.preventDefault();
-        handleOperator('/');
-      } else if (e.key === 'Enter' || e.key === '=') handleEquals();
-      else if (e.key === 'Escape') handleClear();
-      else if (e.key === 'Backspace') handleBackspace();
+        handleOperator("/");
+      } else if (e.key === "Enter" || e.key === "=") handleEquals();
+      else if (e.key === "Escape") handleClear();
+      else if (e.key === "Backspace") handleBackspace();
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [handleNumber, handleOperator, handleEquals, handleClear, handleBackspace, handleUndo, handleRedo]);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [
+    handleNumber,
+    handleOperator,
+    handleEquals,
+    handleClear,
+    handleBackspace,
+    handleUndo,
+    handleRedo,
+  ]);
 
   return {
     display,

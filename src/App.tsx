@@ -1,7 +1,7 @@
-import { useCalculator } from "./src/hooks/useCalculator";
-import { Display } from "./src/components/Display";
-import { Keypad } from "./src/components/Keypad";
-import { HistoryPanel } from "./src/components/HistoryPanel";
+import { Display } from "./components/Display";
+import { HistoryPanel } from "./components/HistoryPanel";
+import { Keypad } from "./components/Keypad";
+import { useCalculator } from "./hooks/useCalculator";
 
 export default function App() {
   const calc = useCalculator();

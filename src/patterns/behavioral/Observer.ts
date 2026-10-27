@@ -1,4 +1,3 @@
-
 export type ObserverCallback<T> = (data: T) => void;
 
 export class CalculatorObserver<T = unknown> {
@@ -19,7 +18,7 @@ export class CalculatorObserver<T = unknown> {
       try {
         cb(data);
       } catch (err) {
-        console.error('[Observer] Subscriber error:', err);
+        console.error("[Observer] Subscriber error:", err);
       }
     });
   }
@@ -30,6 +29,6 @@ export class CalculatorObserver<T = unknown> {
 }
 
 export interface CalcEvent {
-  type: 'display' | 'history' | 'mode' | 'error' | 'state';
+  type: "display" | "history" | "mode" | "error" | "state" | "result";
   payload: unknown;
 }
