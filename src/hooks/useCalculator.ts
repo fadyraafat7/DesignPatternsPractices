@@ -30,8 +30,15 @@ interface Snapshot {
 }
 
 export function useCalculator() {
+  const [historyProxy] = useState(() => {
+    try {
+      return new HistoryProxy(window.localStorage);
+    } catch {
+      return new HistoryProxy();
+    }
+  });
   const [display, setDisplay] = useState("0");
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => historyProxy.getAll());
   const [mode, setMode] = useState<CalcMode>("BASIC");
   const [stateName, setStateName] = useState<CalcStateName>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +47,6 @@ export function useCalculator() {
   const patternTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const facadeRef = useRef(new CalculatorFacade());
-  const historyProxyRef = useRef(new HistoryProxy());
   const commandInvokerRef = useRef(new CommandInvoker());
   const observerRef = useRef(new CalculatorObserver<CalcEvent>());
   const stateMachineRef = useRef(new StateMachine());
@@ -105,9 +111,9 @@ export function useCalculator() {
   }, []);
 
   const addToHistory = useCallback((entry: HistoryEntry) => {
-    historyProxyRef.current.add(entry);
-    setHistory([...historyProxyRef.current.getAll()]);
-  }, []);
+    historyProxy.add(entry);
+    setHistory(historyProxy.getAll());
+  }, [historyProxy]);
 
   const handleNumber = useCallback(
     (num: string) => {
@@ -166,6 +172,14 @@ export function useCalculator() {
       return;
     }
     const snap = takeSnapshot();
+    let recorded = false;
+
+    const record = (entry: HistoryEntry) => {
+      if (!recorded) {
+        addToHistory(entry);
+        recorded = true;
+      }
+    };
 
     const cmd: Command = {
       description: "Equals",
@@ -181,7 +195,7 @@ export function useCalculator() {
           const formatted = facadeRef.current.formatResult(result);
           const expression = `${ctx.leftOperand} ${ctx.currentOperator} ${right}`;
 
-          addToHistory({
+          record({
             id: crypto.randomUUID(),
             expression,
             result: formatted,
@@ -205,7 +219,7 @@ export function useCalculator() {
           ctx.error = message;
           setError(message);
           setDisplay("Error");
-          addToHistory({
+          record({
             id: crypto.randomUUID(),
             expression: `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay}`,
             result: message,
@@ -265,6 +279,13 @@ export function useCalculator() {
       if (state === "error" || (state === "operator" && !ctx.rightDisplay)) return;
       const value = Number(state === "operator" ? ctx.rightDisplay : ctx.display);
       const snap = takeSnapshot();
+      let recorded = false;
+      const record = (entry: HistoryEntry) => {
+        if (!recorded) {
+          addToHistory(entry);
+          recorded = true;
+        }
+      };
 
       const cmd: Command = {
         description: `Scientific ${fn}`,
@@ -273,7 +294,7 @@ export function useCalculator() {
             const result = facadeRef.current.calculateUnary(value, fn);
             const formatted = facadeRef.current.formatResult(result);
             const expression = `${fn}(${value})`;
-            addToHistory({
+            record({
               id: crypto.randomUUID(),
               expression,
               result: formatted,
@@ -298,7 +319,7 @@ export function useCalculator() {
             setStateName("error");
             setError(message);
             setDisplay("Error");
-            addToHistory({
+            record({
               id: crypto.randomUUID(),
               expression: `${fn}(${value})`,
               result: message,
@@ -361,9 +382,9 @@ export function useCalculator() {
   }, [flashPattern]);
 
   const clearHistory = useCallback(() => {
-    historyProxyRef.current.clear();
+    historyProxy.clear();
     setHistory([]);
-  }, []);
+  }, [historyProxy]);
 
   useEffect(() => {
     const unsubscribe = observerRef.current.subscribe((event) => {
