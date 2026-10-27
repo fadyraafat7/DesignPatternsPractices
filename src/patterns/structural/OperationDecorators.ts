@@ -21,6 +21,7 @@ export class ValidationDecorator extends OperationDecorator {
     const sym = this.wrapped.symbol;
 
     if (sym === '/' && b === 0) throw new Error('Cannot divide by zero');
+    if (sym === '%' && b === 0) throw new Error('Cannot divide by zero');
     if (sym === '1/x' && a === 0) throw new Error('Cannot divide by zero');
     if (sym === '√' && a < 0) throw new Error('Cannot take square root of negative');
     if (sym === 'log' && a <= 0) throw new Error('Logarithm undefined for non-positive');
@@ -30,7 +31,9 @@ export class ValidationDecorator extends OperationDecorator {
     }
 
     console.log(`[Decorator:Validation] ✓ ${a} ${sym} ${b ?? ''}`);
-    return this.wrapped.execute(a, b);
+    const result = this.wrapped.execute(a, b);
+    if (!Number.isFinite(result)) throw new Error('Result is not a finite number');
+    return result;
   }
 }
 

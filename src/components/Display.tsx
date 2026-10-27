@@ -47,6 +47,8 @@ export function Display({
 
       <div
         key={display}
+        role="status"
+        aria-label="Calculator display"
         className="text-right font-mono text-4xl md:text-5xl font-bold text-white break-all leading-tight animate-scale-in"
       >
         {display}

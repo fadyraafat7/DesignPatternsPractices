@@ -64,7 +64,7 @@ export function Keypad({
     },
     {
       label: "%",
-      action: () => mode === "BASIC" && onScientific("%"),
+      action: () => onOperator("%"),
       style: "bg-slate-700/50 hover:bg-slate-700 border-slate-600",
     },
     {
@@ -139,6 +139,7 @@ export function Keypad({
           disabled={!canUndo}
           className="py-2 px-3 bg-slate-700/50 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm transition-all border border-slate-600"
           title="Undo (Ctrl+Z)"
+          aria-label="Undo"
         >
           ↶
         </button>
@@ -147,6 +148,7 @@ export function Keypad({
           disabled={!canRedo}
           className="py-2 px-3 bg-slate-700/50 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm transition-all border border-slate-600"
           title="Redo (Ctrl+Y)"
+          aria-label="Redo"
         >
           ↷
         </button>
@@ -154,6 +156,7 @@ export function Keypad({
           onClick={onBackspace}
           className="py-2 px-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-sm transition-all border border-slate-600"
           title="Backspace"
+          aria-label="Backspace"
         >
           ⌫
         </button>
@@ -165,7 +168,7 @@ export function Keypad({
             {scientificOps.map((op) => (
               <button
                 key={op.sym}
-                onClick={() => onScientific(op.sym)}
+                onClick={() => op.sym === "^" || op.sym === "%" ? onOperator(op.sym) : onScientific(op.sym)}
                 className="py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-lg text-sm font-mono transition-all active:scale-95"
               >
                 {op.label}

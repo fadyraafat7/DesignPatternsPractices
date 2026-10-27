@@ -18,8 +18,13 @@ export class IdleState implements CalcState {
     return true;
   }
 
-  handleOperator(): boolean {
-    return false;
+  handleOperator(ctx: CalcContext, op: OperationSymbol): boolean {
+    ctx.leftOperand = 0;
+    ctx.currentOperator = op;
+    ctx.rightDisplay = '';
+    ctx.display = `0 ${op} `;
+    ctx.setState('operator');
+    return true;
   }
 
   handleEquals(): boolean {
@@ -73,7 +78,9 @@ export class OperatorState implements CalcState {
 
   handleInput(ctx: CalcContext, value: string): boolean {
     if (value === '.' && ctx.rightDisplay.includes('.')) return false;
-    if (ctx.rightDisplay === '' && value !== '.') {
+    if (ctx.rightDisplay === '' && value === '.') {
+      ctx.rightDisplay = '0.';
+    } else if (ctx.rightDisplay === '0' && value !== '.') {
       ctx.rightDisplay = value;
     } else {
       ctx.rightDisplay += value;

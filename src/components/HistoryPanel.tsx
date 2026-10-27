@@ -22,7 +22,7 @@ export function HistoryPanel({ history, onClear }: HistoryPanelProps) {
       <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
         {history.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-sm">
-            No calculations yet Start typing!
+            No calculations yet. Start typing!
           </div>
         ) : (
           history.slice(0, 15).map((h) => (

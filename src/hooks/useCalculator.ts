@@ -36,6 +36,8 @@ export function useCalculator() {
   const [stateName, setStateName] = useState<CalcStateName>("idle");
   const [error, setError] = useState<string | null>(null);
   const [activePattern, setActivePattern] = useState<string | null>(null);
+  const [commandAvailability, setCommandAvailability] = useState({ canUndo: false, canRedo: false });
+  const patternTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const facadeRef = useRef(new CalculatorFacade());
   const historyProxyRef = useRef(new HistoryProxy());
@@ -57,9 +59,26 @@ export function useCalculator() {
   });
 
   const flashPattern = useCallback((name: string) => {
+    if (patternTimerRef.current) clearTimeout(patternTimerRef.current);
     setActivePattern(name);
-    window.setTimeout(() => setActivePattern(null), 1500);
+    patternTimerRef.current = setTimeout(() => setActivePattern(null), 1500);
   }, []);
+
+  useEffect(() => () => {
+    if (patternTimerRef.current) clearTimeout(patternTimerRef.current);
+  }, []);
+
+  const updateCommandAvailability = useCallback(() => {
+    setCommandAvailability({
+      canUndo: commandInvokerRef.current.canUndo(),
+      canRedo: commandInvokerRef.current.canRedo(),
+    });
+  }, []);
+
+  const executeCommand = useCallback((command: Command) => {
+    commandInvokerRef.current.execute(command);
+    updateCommandAvailability();
+  }, [updateCommandAvailability]);
 
   const takeSnapshot = useCallback(
     (): Snapshot => ({
@@ -110,9 +129,9 @@ export function useCalculator() {
         },
         undo: () => restoreSnapshot(snap),
       };
-      commandInvokerRef.current.execute(cmd);
+      executeCommand(cmd);
     },
-    [flashPattern, takeSnapshot, restoreSnapshot],
+    [flashPattern, takeSnapshot, restoreSnapshot, executeCommand],
   );
 
   const handleOperator = useCallback(
@@ -132,9 +151,9 @@ export function useCalculator() {
         },
         undo: () => restoreSnapshot(snap),
       };
-      commandInvokerRef.current.execute(cmd);
+      executeCommand(cmd);
     },
-    [flashPattern, takeSnapshot, restoreSnapshot],
+    [flashPattern, takeSnapshot, restoreSnapshot, executeCommand],
   );
 
   const handleEquals = useCallback(() => {
@@ -197,8 +216,8 @@ export function useCalculator() {
       },
       undo: () => restoreSnapshot(snap),
     };
-    commandInvokerRef.current.execute(cmd);
-  }, [flashPattern, takeSnapshot, restoreSnapshot, addToHistory]);
+    executeCommand(cmd);
+  }, [flashPattern, takeSnapshot, restoreSnapshot, addToHistory, executeCommand]);
 
   const handleClear = useCallback(() => {
     flashPattern("Command");
@@ -213,28 +232,39 @@ export function useCalculator() {
       },
       undo: () => restoreSnapshot(snap),
     };
-    commandInvokerRef.current.execute(cmd);
-  }, [flashPattern, takeSnapshot, restoreSnapshot]);
+    executeCommand(cmd);
+  }, [flashPattern, takeSnapshot, restoreSnapshot, executeCommand]);
 
   const handleBackspace = useCallback(() => {
     const ctx = ctxRef.current;
     const state = stateMachineRef.current.getStateName();
-    if (state === "operator" && ctx.rightDisplay.length > 0) {
-      ctx.rightDisplay = ctx.rightDisplay.slice(0, -1);
-      ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay || ""}`;
-      setDisplay(ctx.display);
-    } else if (state === "input" && ctx.display.length > 1) {
-      ctx.display = ctx.display.slice(0, -1);
-      setDisplay(ctx.display);
-    }
-  }, []);
+    if ((state !== "operator" || !ctx.rightDisplay) && state !== "input") return;
+    const snap = takeSnapshot();
+    executeCommand({
+      description: "Backspace",
+      execute: () => {
+        if (state === "operator") {
+          ctx.rightDisplay = ctx.rightDisplay.slice(0, -1);
+          if (ctx.rightDisplay === "-") ctx.rightDisplay = "";
+          ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${ctx.rightDisplay}`;
+        } else {
+          ctx.display = ctx.display.slice(0, -1);
+          if (!ctx.display || ctx.display === "-") ctx.display = "0";
+        }
+        setDisplay(ctx.display);
+      },
+      undo: () => restoreSnapshot(snap),
+    });
+  }, [executeCommand, takeSnapshot, restoreSnapshot]);
 
   const handleScientific = useCallback(
     (fn: OperationSymbol) => {
       flashPattern("Strategy");
       const ctx = ctxRef.current;
-      const value = parseFloat(ctx.display) || 0;
-      const prevDisplay = ctx.display;
+      const state = stateMachineRef.current.getStateName();
+      if (state === "error" || (state === "operator" && !ctx.rightDisplay)) return;
+      const value = Number(state === "operator" ? ctx.rightDisplay : ctx.display);
+      const snap = takeSnapshot();
 
       const cmd: Command = {
         description: `Scientific ${fn}`,
@@ -250,12 +280,22 @@ export function useCalculator() {
               timestamp: new Date().toLocaleTimeString(),
               error: false,
             });
-            setDisplay(formatted);
-            ctx.display = formatted;
-            stateMachineRef.current.setState("result");
-            setStateName("result");
+            ctx.error = null;
+            setError(null);
+            if (state === "operator") {
+              ctx.rightDisplay = formatted;
+              ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${formatted}`;
+            } else {
+              ctx.display = formatted;
+              stateMachineRef.current.setState("result");
+              setStateName("result");
+            }
+            setDisplay(ctx.display);
           } catch (err) {
             const message = err instanceof Error ? err.message : "Error";
+            ctx.error = message;
+            stateMachineRef.current.setState("error");
+            setStateName("error");
             setError(message);
             setDisplay("Error");
             addToHistory({
@@ -267,34 +307,46 @@ export function useCalculator() {
             });
           }
         },
-        undo: () => {
-          setDisplay(prevDisplay);
-          ctx.display = prevDisplay;
-        },
+        undo: () => restoreSnapshot(snap),
       };
-      commandInvokerRef.current.execute(cmd);
+      executeCommand(cmd);
     },
-    [flashPattern, addToHistory],
+    [flashPattern, addToHistory, takeSnapshot, restoreSnapshot, executeCommand],
   );
 
   const handleToggleSign = useCallback(() => {
     const ctx = ctxRef.current;
-    if (ctx.display === "0") return;
-    ctx.display = ctx.display.startsWith("-")
-      ? ctx.display.slice(1)
-      : "-" + ctx.display;
-    setDisplay(ctx.display);
-  }, []);
+    const state = stateMachineRef.current.getStateName();
+    if (state === "error" || state === "idle" || (state === "operator" && !ctx.rightDisplay)) return;
+    const snap = takeSnapshot();
+    executeCommand({
+      description: "Toggle sign",
+      execute: () => {
+        const value = state === "operator" ? ctx.rightDisplay : ctx.display;
+        const next = value.startsWith("-") ? value.slice(1) : `-${value}`;
+        if (state === "operator") {
+          ctx.rightDisplay = next;
+          ctx.display = `${ctx.leftOperand} ${ctx.currentOperator} ${next}`;
+        } else {
+          ctx.display = next;
+        }
+        setDisplay(ctx.display);
+      },
+      undo: () => restoreSnapshot(snap),
+    });
+  }, [executeCommand, takeSnapshot, restoreSnapshot]);
 
   const handleUndo = useCallback(() => {
     flashPattern("Command");
     commandInvokerRef.current.undo();
-  }, [flashPattern]);
+    updateCommandAvailability();
+  }, [flashPattern, updateCommandAvailability]);
 
   const handleRedo = useCallback(() => {
     flashPattern("Command");
     commandInvokerRef.current.redo();
-  }, [flashPattern]);
+    updateCommandAvailability();
+  }, [flashPattern, updateCommandAvailability]);
 
   const toggleMode = useCallback(() => {
     flashPattern("Strategy");
@@ -328,7 +380,7 @@ export function useCalculator() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName)) return;
 
       if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
@@ -340,7 +392,8 @@ export function useCalculator() {
         handleRedo();
         return;
       }
-      if (/[0-9]/.test(e.key)) handleNumber(e.key);
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^[0-9]$/.test(e.key)) handleNumber(e.key);
       else if (e.key === ".") handleNumber(".");
       else if (e.key === "+") handleOperator("+");
       else if (e.key === "-") handleOperator("-");
@@ -382,8 +435,6 @@ export function useCalculator() {
     handleRedo,
     toggleMode,
     clearHistory,
-    canUndo: commandInvokerRef.current.canUndo(),
-    canRedo: commandInvokerRef.current.canRedo(),
-    strategy: strategyContextRef.current.getStrategy(),
+    ...commandAvailability,
   };
 }
